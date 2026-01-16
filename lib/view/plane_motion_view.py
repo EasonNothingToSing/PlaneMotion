@@ -6,7 +6,7 @@ Responsible for all visual representation, no business logic.
 import pygame
 import pygame_gui
 from typing import Optional, Tuple, TYPE_CHECKING
-from lib.model import Component, Circle, Rectangle, Connection
+from lib.model import Component, Circle, Rectangle, Trapezoid, Connection
 
 if TYPE_CHECKING:
     from lib.viewmodel import PlaneMotionViewModel
@@ -109,6 +109,14 @@ class PlaneMotionView:
         )
         x += 128
 
+        self.create_trapezoid_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((x, y), (120, height)),
+            text='Trapezoid',
+            manager=self.gui_manager,
+            container=self.control_panel
+        )
+        x += 128
+
         self.delete_selected_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect((x, y), (90, height)),
             text='Delete',
@@ -120,6 +128,14 @@ class PlaneMotionView:
         self.reset_view_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect((x, y), (110, height)),
             text='Reset View',
+            manager=self.gui_manager,
+            container=self.control_panel
+        )
+        x += 118
+
+        self.rotate_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((x, y), (100, height)),
+            text='Rotate 90°',
             manager=self.gui_manager,
             container=self.control_panel
         )
@@ -184,6 +200,8 @@ class PlaneMotionView:
             self._render_circle(component, is_selected)
         elif isinstance(component, Rectangle):
             self._render_rectangle(component, is_selected)
+        elif isinstance(component, Trapezoid):
+            self._render_trapezoid(component, is_selected)
 
     def _render_circle(self, circle: Circle, is_selected: bool):
         """
@@ -223,22 +241,29 @@ class PlaneMotionView:
             rectangle: Rectangle to render
             is_selected: Whether the rectangle is selected
         """
-        # Transform world coordinates to screen coordinates
-        screen_x, screen_y = self.viewmodel.world_to_screen(rectangle.x, rectangle.y)
-        screen_width = rectangle.width * self.viewmodel.viewport_zoom
-        screen_height = rectangle.height * self.viewmodel.viewport_zoom
-        
-        # Calculate top-left corner
-        left = int(screen_x - screen_width / 2)
-        top = int(screen_y - screen_height / 2)
-        
-        # Draw the rectangle
-        rect = pygame.Rect(left, top, int(screen_width), int(screen_height))
-        pygame.draw.rect(self.screen, rectangle.color, rect)
-        
-        # Draw selection outline if selected
+        vertices = rectangle.get_vertices()
+        screen_points = [self.viewmodel.world_to_screen(x, y) for x, y in vertices]
+
+        pygame.draw.polygon(self.screen, rectangle.color, screen_points)
+
         if is_selected:
-            pygame.draw.rect(self.screen, self.selection_color, rect, 2)
+            pygame.draw.polygon(self.screen, self.selection_color, screen_points, 2)
+
+    def _render_trapezoid(self, trapezoid: Trapezoid, is_selected: bool):
+        """
+        Render a trapezoid component.
+        
+        Args:
+            trapezoid: Trapezoid to render
+            is_selected: Whether the trapezoid is selected
+        """
+        vertices = trapezoid.get_vertices()
+        screen_points = [self.viewmodel.world_to_screen(x, y) for x, y in vertices]
+
+        pygame.draw.polygon(self.screen, trapezoid.color, screen_points)
+
+        if is_selected:
+            pygame.draw.polygon(self.screen, self.selection_color, screen_points, 2)
 
     def _render_connections(self):
         """Render all connections."""
@@ -372,10 +397,6 @@ class PlaneMotionView:
 
     def show_file_menu(self):
         """Toggle the File dropdown menu."""
-        # Close insert menu if open
-        if self.insert_dropdown_visible:
-            self.close_insert_dropdown()
-        
         # Toggle file dropdown
         if self.file_dropdown_visible:
             self.close_file_dropdown()
@@ -389,38 +410,6 @@ class PlaneMotionView:
                 object_id='#file_dropdown'
             )
             self.file_dropdown_visible = True
-
-    def show_insert_menu(self):
-        """Toggle the Insert dropdown menu."""
-        # Close file menu if open
-        if self.file_dropdown_visible:
-            self.close_file_dropdown()
-        
-        # Toggle insert dropdown
-        if self.insert_dropdown_visible:
-            self.close_insert_dropdown()
-        else:
-            templates = self.viewmodel.get_component_templates()
-            if not templates:
-                # Add default options to create initial templates
-                options_list = ['Circle (default)', 'Rectangle (default)']
-            else:
-                options_list = []
-                for template in templates:
-                    if isinstance(template, Circle):
-                        options_list.append(f"Circle (r={int(template.radius)})")
-                    elif isinstance(template, Rectangle):
-                        options_list.append(f"Rectangle ({int(template.width)}x{int(template.height)})")
-            
-            if options_list:
-                self.insert_dropdown = pygame_gui.elements.UIDropDownMenu(
-                    options_list=options_list,
-                    starting_option=options_list[0],
-                    relative_rect=pygame.Rect((90, self.menu_height), (220, 40)),
-                    manager=self.gui_manager,
-                    object_id='#insert_dropdown'
-                )
-                self.insert_dropdown_visible = True
 
     def close_dropdowns(self):
         """Close all dropdown menus."""

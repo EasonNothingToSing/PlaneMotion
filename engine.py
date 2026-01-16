@@ -39,6 +39,10 @@ class PlaneMotionEngine:
         self.clock = pygame.time.Clock()
         self.fps = 60
         self.running = True
+
+        # Resize hover/cursor state
+        self.resize_hit_threshold_px = 8
+        self.current_cursor = pygame.SYSTEM_CURSOR_ARROW
         
         # Save/Load manager
         self.save_load_manager = SaveLoadManager()
@@ -121,6 +125,9 @@ class PlaneMotionEngine:
             # Convert screen coordinates to world coordinates
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
             self.viewmodel.record_last_click(world_x, world_y)
+            resize_threshold_world = self.resize_hit_threshold_px / self.viewmodel.viewport_zoom
+            if self.viewmodel.start_resize(world_x, world_y, resize_threshold_world):
+                return
             if not self.viewmodel.start_drag(world_x, world_y):
                 self.viewmodel.deselect_all()
         
@@ -143,6 +150,7 @@ class PlaneMotionEngine:
             event: Pygame mouse button up event
         """
         if event.button == 1:
+            self.viewmodel.stop_resize()
             self.viewmodel.stop_drag()
         elif event.button == 2:
             self.viewmodel.stop_pan()
@@ -159,10 +167,34 @@ class PlaneMotionEngine:
         # Update panning
         if self.viewmodel.is_panning:
             self.viewmodel.update_pan(screen_x, screen_y)
+        # Update resizing
+        elif self.viewmodel.is_resizing():
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.update_resize(world_x, world_y)
         # Update dragging position
         elif self.viewmodel.is_dragging():
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
             self.viewmodel.update_drag(world_x, world_y)
+
+        self._update_hover_cursor(screen_x, screen_y)
+
+    def _update_hover_cursor(self, screen_x: float, screen_y: float):
+        """Update mouse cursor based on hover state."""
+        if self.viewmodel.is_resizing():
+            target_cursor = pygame.SYSTEM_CURSOR_SIZENWSE
+        elif self.viewmodel.is_dragging():
+            target_cursor = pygame.SYSTEM_CURSOR_HAND
+        else:
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            resize_threshold_world = self.resize_hit_threshold_px / self.viewmodel.viewport_zoom
+            if self.viewmodel.get_resize_component_at_point(world_x, world_y, resize_threshold_world):
+                target_cursor = pygame.SYSTEM_CURSOR_SIZENWSE
+            else:
+                target_cursor = pygame.SYSTEM_CURSOR_ARROW
+
+        if target_cursor != self.current_cursor:
+            pygame.mouse.set_cursor(target_cursor)
+            self.current_cursor = target_cursor
 
     def handle_mouse_wheel(self, event):
         """
@@ -238,10 +270,15 @@ class PlaneMotionEngine:
         elif event.ui_element == self.view.create_rectangle_button:
             world_x, world_y = self._get_insertion_point()
             self.viewmodel.create_rectangle(world_x, world_y)
+        elif event.ui_element == self.view.create_trapezoid_button:
+            world_x, world_y = self._get_insertion_point()
+            self.viewmodel.create_trapezoid(world_x, world_y)
         elif event.ui_element == self.view.delete_selected_button:
             self.viewmodel.delete_selected()
         elif event.ui_element == self.view.reset_view_button:
             self.viewmodel.reset_viewport()
+        elif event.ui_element == self.view.rotate_button:
+            self.viewmodel.rotate_selected(90.0)
 
     def _get_insertion_point(self):
         """
@@ -264,8 +301,6 @@ class PlaneMotionEngine:
         Args:
             event: pygame_gui dropdown changed event
         """
-        from lib.model import Circle, Rectangle
-        
         if event.ui_element == self.view.file_dropdown:
             option = event.text
             self.view.close_dropdowns()
@@ -278,37 +313,6 @@ class PlaneMotionEngine:
                 self.save_as_dialog()
             elif option == 'Exit':
                 self.running = False
-        
-        elif event.ui_element == self.view.insert_dropdown:
-            option = event.text
-            self.view.close_dropdowns()
-            
-            # Get mouse position for insertion
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            world_x, world_y = self.viewmodel.screen_to_world(mouse_x, mouse_y)
-            
-            # Handle default options
-            if option == 'Circle (default)':
-                self.viewmodel.create_circle(world_x, world_y)
-            elif option == 'Rectangle (default)':
-                self.viewmodel.create_rectangle(world_x, world_y)
-            else:
-                # Match with templates
-                templates = self.viewmodel.get_component_templates()
-                for i, template in enumerate(templates):
-                    template_str = ""
-                    if isinstance(template, Circle):
-                        template_str = f"Circle (r={int(template.radius)})"
-                    elif isinstance(template, Rectangle):
-                        template_str = f"Rectangle ({int(template.width)}x{int(template.height)})"
-                    
-                    if option == template_str:
-                        # Create component at mouse position using template
-                        if isinstance(template, Circle):
-                            self.viewmodel.create_circle(world_x, world_y, template.radius, template.color)
-                        elif isinstance(template, Rectangle):
-                            self.viewmodel.create_rectangle(world_x, world_y, template.width, template.height, template.color)
-                        break
 
     def open_file_dialog(self):
         """Open file dialog to load a scene."""

@@ -3,8 +3,9 @@ ViewModel layer: Business logic and state management.
 Handles user interactions, component state, and coordinates between Model and View.
 """
 
+import math
 from typing import List, Optional, Tuple
-from lib.model import Component, Circle, Rectangle, Connection
+from lib.model import Component, Circle, Rectangle, Trapezoid, Connection
 
 
 class PlaneMotionViewModel:
@@ -26,6 +27,9 @@ class PlaneMotionViewModel:
         self.dragging_component: Optional[Component] = None
         self.drag_offset_x = 0.0
         self.drag_offset_y = 0.0
+
+        # Resizing state
+        self.resizing_component: Optional[Component] = None
         
         # Connection creation state
         self.connection_start: Optional[Component] = None
@@ -55,6 +59,10 @@ class PlaneMotionViewModel:
         
         # Notifications for View
         self.status_message: str = ""
+
+        # Component scale limits
+        self.min_component_scale = 0.25
+        self.max_component_scale = 4.0
 
     # Component creation methods
     def create_circle(self, x: float, y: float, radius: float = 30, 
@@ -105,6 +113,40 @@ class PlaneMotionViewModel:
             self.component_templates.append(template)
         self.status_message = "Rectangle created"
         return rectangle
+
+    def create_trapezoid(self, x: float, y: float, top_width: float = 50,
+                         bottom_width: float = 90, height: float = 50,
+                         color: Tuple[int, int, int] = (120, 200, 140)) -> Trapezoid:
+        """
+        Create a new trapezoid component.
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            top_width: Top width
+            bottom_width: Bottom width
+            height: Trapezoid height
+            color: RGB color tuple
+            
+        Returns:
+            Created Trapezoid instance
+        """
+        trapezoid = Trapezoid(x, y, top_width, bottom_width, height, color)
+        self.components.append(trapezoid)
+        # Add to templates
+        template = Trapezoid(0, 0, top_width, bottom_width, height, color)
+        if not any(isinstance(t, Trapezoid) and t.top_width == top_width and
+                   t.bottom_width == bottom_width and t.height == height and t.color == color
+                   for t in self.component_templates):
+            self.component_templates.append(template)
+        self.status_message = "Trapezoid created"
+        return trapezoid
+
+    def rotate_selected(self, delta_deg: float = 90.0):
+        """Rotate the selected component."""
+        if self.selected_component:
+            self.selected_component.rotate(delta_deg)
+            self.status_message = "Component rotated"
 
     def create_connection(self, source: Component, target: Component) -> Optional[Connection]:
         """
@@ -212,6 +254,70 @@ class PlaneMotionViewModel:
     def stop_drag(self):
         """Stop dragging operation."""
         self.dragging_component = None
+
+    # Resizing methods
+    def start_resize(self, x: float, y: float, threshold: float) -> bool:
+        """
+        Start resizing if near component edge.
+        
+        Args:
+            x: Mouse X-coordinate (world)
+            y: Mouse Y-coordinate (world)
+            threshold: Edge hit threshold (world)
+            
+        Returns:
+            True if resize started
+        """
+        component = self.get_resize_component_at_point(x, y, threshold)
+        if component:
+            self.resizing_component = component
+            self.selected_component = component
+            return True
+        return False
+
+    def update_resize(self, x: float, y: float):
+        """
+        Update resizing based on current mouse position.
+        
+        Args:
+            x: Mouse X-coordinate (world)
+            y: Mouse Y-coordinate (world)
+        """
+        component = self.resizing_component
+        if not component:
+            return
+
+        dx = abs(x - component.x)
+        dy = abs(y - component.y)
+
+        if isinstance(component, Circle):
+            if component.base_radius > 0:
+                distance = math.hypot(x - component.x, y - component.y)
+                new_scale = distance / component.base_radius
+            else:
+                new_scale = component.scale
+        elif isinstance(component, Rectangle):
+            half_base_w = component.base_width / 2 if component.base_width > 0 else 1.0
+            half_base_h = component.base_height / 2 if component.base_height > 0 else 1.0
+            new_scale = max(dx / half_base_w, dy / half_base_h)
+        elif isinstance(component, Trapezoid):
+            half_base_w = max(component.base_top_width, component.base_bottom_width) / 2
+            half_base_h = component.base_height / 2 if component.base_height > 0 else 1.0
+            if half_base_w <= 0:
+                half_base_w = 1.0
+            new_scale = max(dx / half_base_w, dy / half_base_h)
+        else:
+            new_scale = component.scale
+
+        component.scale = max(self.min_component_scale, min(self.max_component_scale, new_scale))
+
+    def stop_resize(self):
+        """Stop resizing operation."""
+        self.resizing_component = None
+
+    def is_resizing(self) -> bool:
+        """Check if currently resizing."""
+        return self.resizing_component is not None
 
     # Viewport transformation methods
     def world_to_screen(self, world_x: float, world_y: float) -> Tuple[float, float]:
@@ -428,6 +534,63 @@ class PlaneMotionViewModel:
             if component.contains_point(x, y):
                 return component
         return None
+
+    def get_resize_component_at_point(self, x: float, y: float, threshold: float) -> Optional[Component]:
+        """
+        Get a component if the point is near its edge.
+        
+        Args:
+            x: X-coordinate (world)
+            y: Y-coordinate (world)
+            threshold: Edge hit threshold (world)
+        """
+        for component in reversed(self.components):
+            if self._is_near_component_edge(component, x, y, threshold):
+                return component
+        return None
+
+    def _is_near_component_edge(self, component: Component, x: float, y: float, threshold: float) -> bool:
+        """Check if point is near component edge."""
+        if isinstance(component, Circle):
+            distance = math.hypot(x - component.x, y - component.y)
+            return abs(distance - component.radius) <= threshold
+        if isinstance(component, Rectangle):
+            if component.rotation_deg % 360 != 0:
+                vertices = component.get_vertices()
+                return self._is_near_polygon_edge(vertices, x, y, threshold)
+            half_w = component.width / 2
+            half_h = component.height / 2
+            dx = abs(x - component.x)
+            dy = abs(y - component.y)
+            within_bounds = dx <= half_w + threshold and dy <= half_h + threshold
+            near_vertical = abs(dx - half_w) <= threshold and dy <= half_h + threshold
+            near_horizontal = abs(dy - half_h) <= threshold and dx <= half_w + threshold
+            return within_bounds and (near_vertical or near_horizontal)
+        if isinstance(component, Trapezoid):
+            vertices = component.get_vertices()
+            return self._is_near_polygon_edge(vertices, x, y, threshold)
+        return False
+
+    def _is_near_polygon_edge(self, vertices, x: float, y: float, threshold: float) -> bool:
+        """Check if point is near any polygon edge."""
+        for i in range(len(vertices)):
+            x1, y1 = vertices[i]
+            x2, y2 = vertices[(i + 1) % len(vertices)]
+            if self._distance_point_to_segment(x, y, x1, y1, x2, y2) <= threshold:
+                return True
+        return False
+
+    def _distance_point_to_segment(self, px: float, py: float, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Compute distance from point to line segment."""
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(px - x1, py - y1)
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        proj_x = x1 + t * dx
+        proj_y = y1 + t * dy
+        return math.hypot(px - proj_x, py - proj_y)
 
     def get_all_components(self) -> List[Component]:
         """Get all components."""

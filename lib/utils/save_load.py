@@ -6,7 +6,7 @@ Works with MVVM pattern - interacts with Model layer only.
 
 import json
 from typing import List, Tuple
-from lib.model import Component, Circle, Rectangle, Connection
+from lib.model import Component, Circle, Rectangle, Trapezoid, Connection
 
 
 class SaveLoadManager:
@@ -115,6 +115,10 @@ class SaveLoadManager:
             return component
         elif comp_type == 'rectangle':
             component = Rectangle(0, 0)
+            component.from_dict(data)
+            return component
+        elif comp_type == 'trapezoid':
+            component = Trapezoid(0, 0)
             component.from_dict(data)
             return component
         else:
