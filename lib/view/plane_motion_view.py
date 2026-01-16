@@ -31,10 +31,10 @@ class PlaneMotionView:
         self.width = width
         self.height = height
         
-        # Menu and control bar heights
-        self.menu_height = 35
-        self.control_height = 40
-        self.canvas_top = self.menu_height + self.control_height
+        # Unified top bar height
+        self.menu_height = 48
+        self.control_height = self.menu_height
+        self.canvas_top = self.menu_height
         
         # Initialize pygame display with resizable flag
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
@@ -48,8 +48,8 @@ class PlaneMotionView:
             self.gui_manager = pygame_gui.UIManager((width, height))
         
         # Create menu and control bars
-        self._create_menu_bar()
         self._create_control_bar()
+        self._create_menu_bar()
         
         # Colors
         self.bg_color = (30, 30, 40)
@@ -69,9 +69,10 @@ class PlaneMotionView:
         
         # File menu button
         self.file_menu_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((5, 5), (80, menu_bar_height - 10)),
+            relative_rect=pygame.Rect((10, 8), (80, menu_bar_height - 16)),
             text='File',
             manager=self.gui_manager,
+            container=self.control_panel,
             object_id='#file_menu_button'
         )
         
@@ -84,12 +85,12 @@ class PlaneMotionView:
     def _create_control_bar(self):
         """Create the control bar with common actions."""
         self.control_panel = pygame_gui.elements.UIPanel(
-            relative_rect=pygame.Rect((0, self.menu_height), (self.width, self.control_height)),
+            relative_rect=pygame.Rect((0, 0), (self.width, self.control_height)),
             manager=self.gui_manager
         )
 
-        x = 12
-        y = 6
+        x = 100
+        y = 8
         height = self.control_height - 12
 
         self.create_circle_button = pygame_gui.elements.UIButton(
@@ -133,13 +134,9 @@ class PlaneMotionView:
         # Clear screen
         self.screen.fill(self.bg_color)
         
-        # Draw menu bar background
+        # Draw unified top bar background
         pygame.draw.rect(self.screen, self.menu_bg_color,
                 pygame.Rect(0, 0, self.width, self.menu_height))
-
-        # Draw control bar background
-        pygame.draw.rect(self.screen, self.control_bg_color,
-                pygame.Rect(0, self.menu_height, self.width, self.control_height))
         
         # Draw GUI elements first (buttons and dropdowns)
         self.gui_manager.draw_ui(self.screen)
@@ -349,7 +346,7 @@ class PlaneMotionView:
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         self.gui_manager.set_window_resolution((width, height))
         if hasattr(self, 'control_panel') and self.control_panel is not None:
-            self.control_panel.set_relative_position((0, self.menu_height))
+            self.control_panel.set_relative_position((0, 0))
             self.control_panel.set_dimensions((width, self.control_height))
 
     def update(self, time_delta: float):

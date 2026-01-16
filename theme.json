@@ -20,15 +20,15 @@
     },
     "drop_down_menu": {
         "colours": {
-            "normal_bg": "#2b2f3a",
-            "hovered_bg": "#3a4050",
-            "selected_bg": "#3a4050",
-            "normal_text": "#e6e8ef",
-            "hovered_text": "#ffffff",
-            "selected_text": "#ffffff",
-            "normal_border": "#3b4252",
-            "hovered_border": "#4c566a",
-            "selected_border": "#4c566a"
+            "normal_bg": "#ffffff",
+            "hovered_bg": "#f2f4f8",
+            "selected_bg": "#e9edf3",
+            "normal_text": "#1f2430",
+            "hovered_text": "#0f141f",
+            "selected_text": "#0f141f",
+            "normal_border": "#cfd6e2",
+            "hovered_border": "#b8c2d1",
+            "selected_border": "#b8c2d1"
         }
     },
     "#file_menu_button": {
