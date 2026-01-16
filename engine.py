@@ -4,7 +4,10 @@ Acts as the controller in MVVM pattern.
 """
 
 import pygame
+import pygame_gui
 import sys
+import tkinter as tk
+from tkinter import filedialog
 from lib.viewmodel import PlaneMotionViewModel
 from lib.view import PlaneMotionView
 from lib.utils import SaveLoadManager
@@ -43,22 +46,47 @@ class PlaneMotionEngine:
     def run(self):
         """Main game loop."""
         while self.running:
+            time_delta = self.clock.tick(self.fps) / 1000.0
             self.handle_events()
-            self.update()
+            self.update(time_delta)
             self.render()
-            self.clock.tick(self.fps)
         
         pygame.quit()
         sys.exit()
 
+    def update(self, time_delta: float):
+        """
+        Update game state.
+        
+        Args:
+            time_delta: Time since last update in seconds
+        """
+        self.view.update(time_delta)
+
+    def render(self):
+        """Render the scene."""
+        mouse_pos = pygame.mouse.get_pos()
+        self.view.render(mouse_pos)
+        self.view.flip()
+
     def handle_events(self):
         """Handle all pygame events and delegate to ViewModel."""
         for event in pygame.event.get():
+            # Let GUI handle events first
+            if self.view.process_event(event):
+                continue
+            
             if event.type == pygame.QUIT:
                 self.running = False
             
             elif event.type == pygame.VIDEORESIZE:
                 self.handle_window_resize(event)
+            
+            elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+                self.handle_gui_button(event)
+            
+            elif event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
+                self.handle_gui_dropdown(event)
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.handle_mouse_down(event)
@@ -84,10 +112,15 @@ class PlaneMotionEngine:
         """
         screen_x, screen_y = event.pos
         
+        # Ignore clicks on menu and control bars
+        if screen_y < self.view.canvas_top:
+            return
+        
         # Left click - select and drag
         if event.button == 1:
             # Convert screen coordinates to world coordinates
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.record_last_click(world_x, world_y)
             if not self.viewmodel.start_drag(world_x, world_y):
                 self.viewmodel.deselect_all()
         
@@ -99,6 +132,7 @@ class PlaneMotionEngine:
         elif event.button == 3:
             # Convert screen coordinates to world coordinates
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.record_last_click(world_x, world_y)
             self.viewmodel.start_connection_at_point(world_x, world_y)
 
     def handle_mouse_up(self, event):
@@ -189,20 +223,176 @@ class PlaneMotionEngine:
         elif event.key == pygame.K_ESCAPE:
             self.viewmodel.cancel_connection()
 
-    def save_scene(self):
-        """Save the current scene."""
-        components = self.viewmodel.get_all_components()
-        connections = self.viewmodel.get_all_connections()
-        self.save_load_manager.save_to_file(components, connections)
+    def handle_gui_button(self, event):
+        """
+        Handle GUI button press events.
+        
+        Args:
+            event: pygame_gui button pressed event
+        """
+        if event.ui_element == self.view.file_menu_button:
+            self.view.show_file_menu()
+        elif event.ui_element == self.view.create_circle_button:
+            world_x, world_y = self._get_insertion_point()
+            self.viewmodel.create_circle(world_x, world_y)
+        elif event.ui_element == self.view.create_rectangle_button:
+            world_x, world_y = self._get_insertion_point()
+            self.viewmodel.create_rectangle(world_x, world_y)
+        elif event.ui_element == self.view.delete_selected_button:
+            self.viewmodel.delete_selected()
+        elif event.ui_element == self.view.reset_view_button:
+            self.viewmodel.reset_viewport()
 
-    def load_scene(self):
-        """Load a scene from file."""
-        components, connections = self.save_load_manager.load_from_file()
-        self.viewmodel.set_components_and_connections(components, connections)
+    def _get_insertion_point(self):
+        """
+        Get insertion point based on last click or canvas center.
+        
+        Returns:
+            Tuple of (world_x, world_y)
+        """
+        if self.viewmodel.has_last_click():
+            return self.viewmodel.get_last_click()
+        
+        center_screen_x = self.view.width / 2
+        center_screen_y = self.view.canvas_top + (self.view.height - self.view.canvas_top) / 2
+        return self.viewmodel.screen_to_world(center_screen_x, center_screen_y)
 
-    def update(self):
-        """Update game state (called every frame)."""
-        pass
+    def handle_gui_dropdown(self, event):
+        """
+        Handle GUI dropdown selection events.
+        
+        Args:
+            event: pygame_gui dropdown changed event
+        """
+        from lib.model import Circle, Rectangle
+        
+        if event.ui_element == self.view.file_dropdown:
+            option = event.text
+            self.view.close_dropdowns()
+            
+            if option == 'Open':
+                self.open_file_dialog()
+            elif option == 'Save':
+                self.save_scene()
+            elif option == 'Save As':
+                self.save_as_dialog()
+            elif option == 'Exit':
+                self.running = False
+        
+        elif event.ui_element == self.view.insert_dropdown:
+            option = event.text
+            self.view.close_dropdowns()
+            
+            # Get mouse position for insertion
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            world_x, world_y = self.viewmodel.screen_to_world(mouse_x, mouse_y)
+            
+            # Handle default options
+            if option == 'Circle (default)':
+                self.viewmodel.create_circle(world_x, world_y)
+            elif option == 'Rectangle (default)':
+                self.viewmodel.create_rectangle(world_x, world_y)
+            else:
+                # Match with templates
+                templates = self.viewmodel.get_component_templates()
+                for i, template in enumerate(templates):
+                    template_str = ""
+                    if isinstance(template, Circle):
+                        template_str = f"Circle (r={int(template.radius)})"
+                    elif isinstance(template, Rectangle):
+                        template_str = f"Rectangle ({int(template.width)}x{int(template.height)})"
+                    
+                    if option == template_str:
+                        # Create component at mouse position using template
+                        if isinstance(template, Circle):
+                            self.viewmodel.create_circle(world_x, world_y, template.radius, template.color)
+                        elif isinstance(template, Rectangle):
+                            self.viewmodel.create_rectangle(world_x, world_y, template.width, template.height, template.color)
+                        break
+
+    def open_file_dialog(self):
+        """Open file dialog to load a scene."""
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
+        file_path = filedialog.askopenfilename(
+            title="Open Scene",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            self.load_scene(file_path)
+        
+        root.destroy()
+
+    def save_as_dialog(self):
+        """Open save as dialog."""
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
+        file_path = filedialog.asksaveasfilename(
+            title="Save Scene As",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            self.save_scene(file_path)
+        
+        root.destroy()
+
+    def save_scene(self, file_path: str = None):
+        """
+        Save the current scene.
+        
+        Args:
+            file_path: Optional file path to save to
+        """
+        if file_path is None:
+            file_path = self.viewmodel.get_file_path()
+        
+        if file_path is None:
+            self.save_as_dialog()
+            return
+        
+        try:
+            components = self.viewmodel.get_all_components()
+            connections = self.viewmodel.get_all_connections()
+            self.save_load_manager.save_to_file(components, connections, file_path)
+            self.viewmodel.set_file_path(file_path)
+            self.viewmodel.status_message = f"Saved to {file_path}"
+        except Exception as e:
+            self.viewmodel.status_message = f"Failed to save: {str(e)}"
+
+    def load_scene(self, file_path: str = None):
+        """
+        Load a scene from file.
+        
+        Args:
+            file_path: Optional file path to load from
+        """
+        if file_path is None:
+            self.open_file_dialog()
+            return
+        
+        try:
+            components, connections = self.save_load_manager.load_from_file(file_path)
+            self.viewmodel.set_components_and_connections(components, connections)
+            self.viewmodel.set_file_path(file_path)
+            self.viewmodel.status_message = f"Loaded from {file_path}"
+        except Exception as e:
+            self.viewmodel.status_message = f"Failed to load: {str(e)}"
+
+    def update(self, time_delta: float):
+        """
+        Update game state (called every frame).
+        
+        Args:
+            time_delta: Time since last update in seconds
+        """
+        self.view.update(time_delta)
 
     def render(self):
         """Render the scene using View."""

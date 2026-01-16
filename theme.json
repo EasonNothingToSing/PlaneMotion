@@ -1,0 +1,60 @@
+{
+    "button": {
+        "colours": {
+            "normal_bg": "#2b2f3a",
+            "hovered_bg": "#3a4050",
+            "disabled_bg": "#1f232b",
+            "selected_bg": "#2b2f3a",
+            "active_bg": "#434a5a",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "selected_text": "#e6e8ef",
+            "disabled_text": "#80858f",
+            "active_text": "#ffffff",
+            "normal_border": "#3b4252",
+            "hovered_border": "#4c566a",
+            "disabled_border": "#2a2f3a",
+            "selected_border": "#4c566a",
+            "active_border": "#4c566a"
+        }
+    },
+    "drop_down_menu": {
+        "colours": {
+            "normal_bg": "#2b2f3a",
+            "hovered_bg": "#3a4050",
+            "selected_bg": "#3a4050",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "selected_text": "#ffffff",
+            "normal_border": "#3b4252",
+            "hovered_border": "#4c566a",
+            "selected_border": "#4c566a"
+        }
+    },
+    "#file_menu_button": {
+        "colours": {
+            "normal_bg": "#3b4252",
+            "hovered_bg": "#4c566a",
+            "active_bg": "#2e3440",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "active_text": "#ffffff",
+            "normal_border": "#4c566a",
+            "hovered_border": "#5e81ac",
+            "active_border": "#4c566a"
+        }
+    },
+    "#insert_menu_button": {
+        "colours": {
+            "normal_bg": "#3b4252",
+            "hovered_bg": "#4c566a",
+            "active_bg": "#2e3440",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "active_text": "#ffffff",
+            "normal_border": "#4c566a",
+            "hovered_border": "#5e81ac",
+            "active_border": "#4c566a"
+        }
+    }
+}

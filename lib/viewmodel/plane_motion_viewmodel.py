@@ -42,6 +42,17 @@ class PlaneMotionViewModel:
         self.pan_start_x = 0.0
         self.pan_start_y = 0.0
         
+        # Last click position for inserting components
+        self.last_click_x = 0.0
+        self.last_click_y = 0.0
+        self.last_click_valid = False
+        
+        # Component templates (history of created components)
+        self.component_templates: List[Component] = []
+        
+        # Current file path for save/load operations
+        self.current_file_path: Optional[str] = None
+        
         # Notifications for View
         self.status_message: str = ""
 
@@ -62,6 +73,11 @@ class PlaneMotionViewModel:
         """
         circle = Circle(x, y, radius, color)
         self.components.append(circle)
+        # Add to templates
+        template = Circle(0, 0, radius, color)
+        if not any(isinstance(t, Circle) and t.radius == radius and t.color == color 
+                   for t in self.component_templates):
+            self.component_templates.append(template)
         self.status_message = "Circle created"
         return circle
 
@@ -82,6 +98,11 @@ class PlaneMotionViewModel:
         """
         rectangle = Rectangle(x, y, width, height, color)
         self.components.append(rectangle)
+        # Add to templates
+        template = Rectangle(0, 0, width, height, color)
+        if not any(isinstance(t, Rectangle) and t.width == width and t.height == height and t.color == color
+                   for t in self.component_templates):
+            self.component_templates.append(template)
         self.status_message = "Rectangle created"
         return rectangle
 
@@ -124,6 +145,9 @@ class PlaneMotionViewModel:
         Returns:
             Selected component or None
         """
+        # Record last click position
+        self.record_last_click(x, y)
+        
         # Check components in reverse order (top to bottom)
         for component in reversed(self.components):
             if component.contains_point(x, y):
@@ -137,6 +161,20 @@ class PlaneMotionViewModel:
     def deselect_all(self):
         """Deselect all components."""
         self.selected_component = None
+
+    def record_last_click(self, x: float, y: float):
+        """Record the last click position in world coordinates."""
+        self.last_click_x = x
+        self.last_click_y = y
+        self.last_click_valid = True
+
+    def has_last_click(self) -> bool:
+        """Check whether a last click position is available."""
+        return self.last_click_valid
+
+    def get_last_click(self) -> Tuple[float, float]:
+        """Get the last click position."""
+        return self.last_click_x, self.last_click_y
 
     # Dragging methods
     def start_drag(self, x: float, y: float) -> bool:
@@ -427,6 +465,7 @@ class PlaneMotionViewModel:
         self.selected_component = None
         self.dragging_component = None
         self.connection_start = None
+        self.current_file_path = None
         self.status_message = "Scene cleared"
 
     def set_components_and_connections(self, components: List[Component], connections: List[Connection]):
@@ -450,3 +489,43 @@ class PlaneMotionViewModel:
     def clear_status_message(self):
         """Clear the status message."""
         self.status_message = ""
+
+    # Component template methods
+    def get_component_templates(self) -> List[Component]:
+        """Get list of component templates."""
+        return self.component_templates
+
+    def insert_template_at_last_click(self, template_index: int) -> Optional[Component]:
+        """
+        Insert a component template at the last click position.
+        
+        Args:
+            template_index: Index of the template to insert
+            
+        Returns:
+            Created component or None if invalid index
+        """
+        if 0 <= template_index < len(self.component_templates):
+            template = self.component_templates[template_index]
+            
+            if isinstance(template, Circle):
+                return self.create_circle(
+                    self.last_click_x, self.last_click_y,
+                    template.radius, template.color
+                )
+            elif isinstance(template, Rectangle):
+                return self.create_rectangle(
+                    self.last_click_x, self.last_click_y,
+                    template.width, template.height, template.color
+                )
+        return None
+
+    # File path management
+    def set_file_path(self, file_path: Optional[str]):
+        """Set the current file path."""
+        self.current_file_path = file_path
+
+    def get_file_path(self) -> Optional[str]:
+        """Get the current file path."""
+        return self.current_file_path
+
