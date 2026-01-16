@@ -1,0 +1,153 @@
+{
+  "components": [
+    {
+      "type": "circle",
+      "x": 343,
+      "y": 331,
+      "base_radius": 30,
+      "color": [
+        100,
+        100,
+        255
+      ],
+      "scale": 1.0
+    },
+    {
+      "type": "circle",
+      "x": 703,
+      "y": 455,
+      "base_radius": 30,
+      "color": [
+        100,
+        100,
+        255
+      ],
+      "scale": 1.0
+    },
+    {
+      "type": "circle",
+      "x": 944,
+      "y": 473,
+      "base_radius": 30,
+      "color": [
+        100,
+        100,
+        255
+      ],
+      "scale": 1.0
+    },
+    {
+      "type": "rectangle",
+      "x": 811,
+      "y": 272,
+      "base_width": 60,
+      "base_height": 40,
+      "color": [
+        255,
+        100,
+        100
+      ],
+      "scale": 1.0
+    },
+    {
+      "type": "rectangle",
+      "x": 490,
+      "y": 211,
+      "base_width": 60,
+      "base_height": 40,
+      "color": [
+        255,
+        100,
+        100
+      ],
+      "scale": 1.0
+    },
+    {
+      "type": "rectangle",
+      "x": 433,
+      "y": 508,
+      "base_width": 60,
+      "base_height": 40,
+      "color": [
+        255,
+        100,
+        100
+      ],
+      "scale": 1.0
+    }
+  ],
+  "connections": [
+    {
+      "source_id": 0,
+      "target_id": 4,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 5,
+      "target_id": 4,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 0,
+      "target_id": 5,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 5,
+      "target_id": 3,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 1,
+      "target_id": 4,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 1,
+      "target_id": 3,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 5,
+      "target_id": 1,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    },
+    {
+      "source_id": 1,
+      "target_id": 2,
+      "color": [
+        200,
+        200,
+        200
+      ]
+    }
+  ]
+}
