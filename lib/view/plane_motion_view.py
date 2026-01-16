@@ -30,8 +30,8 @@ class PlaneMotionView:
         self.width = width
         self.height = height
         
-        # Initialize pygame display
-        self.screen = pygame.display.set_mode((width, height))
+        # Initialize pygame display with resizable flag
+        self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         
         # Colors
         self.bg_color = (30, 30, 40)
@@ -249,6 +249,18 @@ class PlaneMotionView:
     def flip(self):
         """Update the display."""
         pygame.display.flip()
+
+    def resize(self, width: int, height: int):
+        """
+        Handle window resize.
+        
+        Args:
+            width: New window width
+            height: New window height
+        """
+        self.width = width
+        self.height = height
+        self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
 
     def set_window_title(self, title: str):
         """

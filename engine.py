@@ -57,6 +57,9 @@ class PlaneMotionEngine:
             if event.type == pygame.QUIT:
                 self.running = False
             
+            elif event.type == pygame.VIDEORESIZE:
+                self.handle_window_resize(event)
+            
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.handle_mouse_down(event)
             
@@ -137,6 +140,15 @@ class PlaneMotionEngine:
         # Zoom viewport around mouse cursor
         mouse_x, mouse_y = pygame.mouse.get_pos()
         self.viewmodel.zoom_viewport(event.y, mouse_x, mouse_y)
+
+    def handle_window_resize(self, event):
+        """
+        Handle window resize event.
+        
+        Args:
+            event: Pygame VIDEORESIZE event
+        """
+        self.view.resize(event.w, event.h)
 
     def handle_key_down(self, event):
         """
