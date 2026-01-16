@@ -30,6 +30,18 @@ class PlaneMotionViewModel:
         # Connection creation state
         self.connection_start: Optional[Component] = None
         
+        # Viewport state (for Visio-like zoom/pan)
+        self.viewport_zoom = 1.0  # Current zoom level
+        self.viewport_offset_x = 0.0  # Viewport X offset
+        self.viewport_offset_y = 0.0  # Viewport Y offset
+        self.min_zoom = 0.25  # Minimum zoom (zoom out 4x)
+        self.max_zoom = 4.0   # Maximum zoom (zoom in 4x)
+        
+        # Pan state
+        self.is_panning = False
+        self.pan_start_x = 0.0
+        self.pan_start_y = 0.0
+        
         # Notifications for View
         self.status_message: str = ""
 
@@ -163,7 +175,112 @@ class PlaneMotionViewModel:
         """Stop dragging operation."""
         self.dragging_component = None
 
-    # Scaling methods
+    # Viewport transformation methods
+    def world_to_screen(self, world_x: float, world_y: float) -> Tuple[float, float]:
+        """
+        Convert world coordinates to screen coordinates.
+        
+        Args:
+            world_x: X-coordinate in world space
+            world_y: Y-coordinate in world space
+            
+        Returns:
+            Tuple of (screen_x, screen_y)
+        """
+        screen_x = (world_x + self.viewport_offset_x) * self.viewport_zoom
+        screen_y = (world_y + self.viewport_offset_y) * self.viewport_zoom
+        return screen_x, screen_y
+
+    def screen_to_world(self, screen_x: float, screen_y: float) -> Tuple[float, float]:
+        """
+        Convert screen coordinates to world coordinates.
+        
+        Args:
+            screen_x: X-coordinate in screen space
+            screen_y: Y-coordinate in screen space
+            
+        Returns:
+            Tuple of (world_x, world_y)
+        """
+        world_x = screen_x / self.viewport_zoom - self.viewport_offset_x
+        world_y = screen_y / self.viewport_zoom - self.viewport_offset_y
+        return world_x, world_y
+
+    # Viewport zoom methods
+    def zoom_viewport(self, delta: float, center_x: float, center_y: float):
+        """
+        Zoom the viewport around a center point.
+        
+        Args:
+            delta: Zoom delta (positive to zoom in, negative to zoom out)
+            center_x: Screen X-coordinate of zoom center
+            center_y: Screen Y-coordinate of zoom center
+        """
+        old_zoom = self.viewport_zoom
+        
+        # Calculate new zoom level
+        zoom_factor = 1.1 if delta > 0 else 0.9
+        new_zoom = old_zoom * zoom_factor
+        
+        # Clamp zoom to limits
+        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+        
+        if new_zoom != old_zoom:
+            # Adjust offset to zoom around the center point
+            world_x, world_y = self.screen_to_world(center_x, center_y)
+            
+            self.viewport_zoom = new_zoom
+            
+            # Recalculate offset to keep the same world point under the cursor
+            self.viewport_offset_x = center_x / new_zoom - world_x
+            self.viewport_offset_y = center_y / new_zoom - world_y
+            
+            zoom_percent = int(self.viewport_zoom * 100)
+            self.status_message = f"Zoom: {zoom_percent}%"
+
+    def reset_viewport(self):
+        """Reset viewport to default zoom and position."""
+        self.viewport_zoom = 1.0
+        self.viewport_offset_x = 0.0
+        self.viewport_offset_y = 0.0
+        self.status_message = "Viewport reset"
+
+    # Pan methods
+    def start_pan(self, screen_x: float, screen_y: float):
+        """
+        Start panning operation.
+        
+        Args:
+            screen_x: Screen X-coordinate
+            screen_y: Screen Y-coordinate
+        """
+        self.is_panning = True
+        self.pan_start_x = screen_x
+        self.pan_start_y = screen_y
+
+    def update_pan(self, screen_x: float, screen_y: float):
+        """
+        Update panning position.
+        
+        Args:
+            screen_x: Current screen X-coordinate
+            screen_y: Current screen Y-coordinate
+        """
+        if self.is_panning:
+            dx = screen_x - self.pan_start_x
+            dy = screen_y - self.pan_start_y
+            
+            self.viewport_offset_x += dx / self.viewport_zoom
+            self.viewport_offset_y += dy / self.viewport_zoom
+            
+            self.pan_start_x = screen_x
+            self.pan_start_y = screen_y
+
+    def stop_pan(self):
+        """Stop panning operation."""
+        self.is_panning = False
+
+    # Scaling methods (keep for individual component scaling if needed)
     def scale_selected(self, delta: float):
         """
         Scale the selected component.

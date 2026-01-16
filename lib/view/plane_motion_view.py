@@ -63,9 +63,10 @@ class PlaneMotionView:
         # Draw components
         self._render_components()
         
-        # Draw UI overlays
+        # Draw UI overlays (always in screen space)
         self._render_help_text()
         self._render_status_message()
+        self._render_zoom_indicator()
 
     def _render_components(self):
         """Render all components."""
@@ -94,12 +95,16 @@ class PlaneMotionView:
             circle: Circle to render
             is_selected: Whether the circle is selected
         """
+        # Transform world coordinates to screen coordinates
+        screen_x, screen_y = self.viewmodel.world_to_screen(circle.x, circle.y)
+        screen_radius = circle.radius * self.viewmodel.viewport_zoom
+        
         # Draw the circle
         pygame.draw.circle(
             self.screen,
             circle.color,
-            (int(circle.x), int(circle.y)),
-            int(circle.radius)
+            (int(screen_x), int(screen_y)),
+            int(screen_radius)
         )
         
         # Draw selection outline if selected
@@ -107,8 +112,8 @@ class PlaneMotionView:
             pygame.draw.circle(
                 self.screen,
                 self.selection_color,
-                (int(circle.x), int(circle.y)),
-                int(circle.radius) + 2,
+                (int(screen_x), int(screen_y)),
+                int(screen_radius) + 2,
                 2
             )
 
@@ -120,12 +125,17 @@ class PlaneMotionView:
             rectangle: Rectangle to render
             is_selected: Whether the rectangle is selected
         """
+        # Transform world coordinates to screen coordinates
+        screen_x, screen_y = self.viewmodel.world_to_screen(rectangle.x, rectangle.y)
+        screen_width = rectangle.width * self.viewmodel.viewport_zoom
+        screen_height = rectangle.height * self.viewmodel.viewport_zoom
+        
         # Calculate top-left corner
-        left = int(rectangle.x - rectangle.width / 2)
-        top = int(rectangle.y - rectangle.height / 2)
+        left = int(screen_x - screen_width / 2)
+        top = int(screen_y - screen_height / 2)
         
         # Draw the rectangle
-        rect = pygame.Rect(left, top, int(rectangle.width), int(rectangle.height))
+        rect = pygame.Rect(left, top, int(screen_width), int(screen_height))
         pygame.draw.rect(self.screen, rectangle.color, rect)
         
         # Draw selection outline if selected
@@ -144,7 +154,14 @@ class PlaneMotionView:
         Args:
             connection: Connection to render
         """
-        start_pos, end_pos = connection.get_line_endpoints()
+        start_pos_world, end_pos_world = connection.get_line_endpoints()
+        
+        # Transform to screen coordinates
+        start_pos = self.viewmodel.world_to_screen(*start_pos_world)
+        end_pos = self.viewmodel.world_to_screen(*end_pos_world)
+        
+        # Scale line width with zoom
+        line_width = max(1, int(connection.line_width * self.viewmodel.viewport_zoom))
         
         # Draw the main line
         pygame.draw.line(
@@ -152,21 +169,22 @@ class PlaneMotionView:
             connection.color,
             start_pos,
             end_pos,
-            connection.line_width
+            line_width
         )
         
         # Draw small circles at connection points
+        circle_radius = max(2, int(4 * self.viewmodel.viewport_zoom))
         pygame.draw.circle(
             self.screen,
             connection.color,
             (int(start_pos[0]), int(start_pos[1])),
-            4
+            circle_radius
         )
         pygame.draw.circle(
             self.screen,
             connection.color,
             (int(end_pos[0]), int(end_pos[1])),
-            4
+            circle_radius
         )
 
     def _render_connection_preview(self, mouse_pos: Tuple[int, int]):
@@ -174,11 +192,17 @@ class PlaneMotionView:
         Render the connection preview line.
         
         Args:
-            mouse_pos: Current mouse position
+            mouse_pos: Current mouse position (in screen space)
         """
-        preview = self.viewmodel.get_connection_preview_line(mouse_pos[0], mouse_pos[1])
+        # Convert mouse position to world space
+        world_mouse_x, world_mouse_y = self.viewmodel.screen_to_world(mouse_pos[0], mouse_pos[1])
+        
+        preview = self.viewmodel.get_connection_preview_line(world_mouse_x, world_mouse_y)
         if preview:
-            start_pos, end_pos = preview
+            start_pos_world, end_pos_world = preview
+            # Transform to screen coordinates
+            start_pos = self.viewmodel.world_to_screen(*start_pos_world)
+            end_pos = self.viewmodel.world_to_screen(*end_pos_world)
             pygame.draw.line(
                 self.screen,
                 self.preview_line_color,
@@ -192,8 +216,8 @@ class PlaneMotionView:
         help_lines = [
             "C: Create Circle | R: Create Rectangle",
             "Left Click: Select/Drag | Right Click: Connect",
-            "Mouse Wheel: Scale | Delete: Remove",
-            "Ctrl+S: Save | Ctrl+L: Load"
+            "Mouse Wheel: Zoom | Middle Click: Pan",
+            "Ctrl+S: Save | Ctrl+L: Load | Ctrl+0: Reset View"
         ]
         
         y_offset = 10
@@ -201,6 +225,16 @@ class PlaneMotionView:
             text_surface = self.font.render(line, True, self.help_text_color)
             self.screen.blit(text_surface, (10, y_offset))
             y_offset += 25
+
+    def _render_zoom_indicator(self):
+        """Render zoom level indicator."""
+        zoom_percent = int(self.viewmodel.viewport_zoom * 100)
+        zoom_text = f"Zoom: {zoom_percent}%"
+        text_surface = self.small_font.render(zoom_text, True, self.help_text_color)
+        text_rect = text_surface.get_rect()
+        text_rect.right = self.width - 10
+        text_rect.top = 10
+        self.screen.blit(text_surface, text_rect)
 
     def _render_status_message(self):
         """Render status message at the bottom of the screen."""

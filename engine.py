@@ -79,16 +79,24 @@ class PlaneMotionEngine:
         Args:
             event: Pygame mouse button down event
         """
-        mouse_x, mouse_y = event.pos
+        screen_x, screen_y = event.pos
         
         # Left click - select and drag
         if event.button == 1:
-            if not self.viewmodel.start_drag(mouse_x, mouse_y):
+            # Convert screen coordinates to world coordinates
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            if not self.viewmodel.start_drag(world_x, world_y):
                 self.viewmodel.deselect_all()
+        
+        # Middle click - pan
+        elif event.button == 2:
+            self.viewmodel.start_pan(screen_x, screen_y)
         
         # Right click - create connections
         elif event.button == 3:
-            self.viewmodel.start_connection_at_point(mouse_x, mouse_y)
+            # Convert screen coordinates to world coordinates
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.start_connection_at_point(world_x, world_y)
 
     def handle_mouse_up(self, event):
         """
@@ -99,6 +107,8 @@ class PlaneMotionEngine:
         """
         if event.button == 1:
             self.viewmodel.stop_drag()
+        elif event.button == 2:
+            self.viewmodel.stop_pan()
 
     def handle_mouse_motion(self, event):
         """
@@ -107,22 +117,26 @@ class PlaneMotionEngine:
         Args:
             event: Pygame mouse motion event
         """
-        mouse_x, mouse_y = event.pos
+        screen_x, screen_y = event.pos
         
+        # Update panning
+        if self.viewmodel.is_panning:
+            self.viewmodel.update_pan(screen_x, screen_y)
         # Update dragging position
-        if self.viewmodel.is_dragging():
-            self.viewmodel.update_drag(mouse_x, mouse_y)
+        elif self.viewmodel.is_dragging():
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.update_drag(world_x, world_y)
 
     def handle_mouse_wheel(self, event):
         """
-        Handle mouse wheel events for scaling.
+        Handle mouse wheel events for viewport zooming.
         
         Args:
             event: Pygame mouse wheel event
         """
-        # Scale the selected component
-        delta = 0.1 if event.y > 0 else -0.1
-        self.viewmodel.scale_selected(delta)
+        # Zoom viewport around mouse cursor
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        self.viewmodel.zoom_viewport(event.y, mouse_x, mouse_y)
 
     def handle_key_down(self, event):
         """
@@ -133,13 +147,15 @@ class PlaneMotionEngine:
         """
         # C - Create circle at mouse position
         if event.key == pygame.K_c:
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            self.viewmodel.create_circle(mouse_x, mouse_y)
+            screen_x, screen_y = pygame.mouse.get_pos()
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.create_circle(world_x, world_y)
         
         # R - Create rectangle at mouse position
         elif event.key == pygame.K_r:
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            self.viewmodel.create_rectangle(mouse_x, mouse_y)
+            screen_x, screen_y = pygame.mouse.get_pos()
+            world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
+            self.viewmodel.create_rectangle(world_x, world_y)
         
         # Delete - Delete selected component
         elif event.key == pygame.K_DELETE:
@@ -152,6 +168,10 @@ class PlaneMotionEngine:
         # Ctrl+L - Load scene
         elif event.key == pygame.K_l and pygame.key.get_mods() & pygame.KMOD_CTRL:
             self.load_scene()
+        
+        # Ctrl+0 - Reset viewport
+        elif event.key == pygame.K_0 and pygame.key.get_mods() & pygame.KMOD_CTRL:
+            self.viewmodel.reset_viewport()
         
         # ESC - Cancel connection creation
         elif event.key == pygame.K_ESCAPE:
