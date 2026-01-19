@@ -1,0 +1,21 @@
+{
+    "button": {
+        "colours": {
+            "normal_bg": "#2b2f3a",
+            "hovered_bg": "#3a4050",
+            "disabled_bg": "#1f232b"
+        }
+    },
+    "#menu_panel": {
+        "colours": {
+            "dark_bg": "#ffffff",
+            "normal_bg": "#ffffff"
+        }
+    },
+    "#menu_item_button": {
+        "colours": {
+            "normal_bg": "#00000000",
+            "hovered_bg": "#e0e0e0"
+        }
+    }
+}

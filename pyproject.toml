@@ -1,10 +1,22 @@
 [project]
 name = "planemotion"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "A 2D component engine for visual programming"
+readme = "README_ENGINE.md"
 requires-python = ">=3.12"
 dependencies = [
     "pygame>=2.6.1",
     "pygame-gui>=0.6.10",
 ]
+authors = [
+    { name = "PlaneMotion Contributors" }
+]
+license = { text = "MIT" }
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["planemotion*"]
+exclude = ["lib*", "examples*", "tests*"]

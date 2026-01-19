@@ -1,0 +1,698 @@
+"""
+ViewModel layer: Business logic and state management.
+Handles user interactions, component state, and coordinates between Model and View.
+"""
+
+import math
+from typing import List, Optional, Tuple
+from planemotion.core.base_component import Component
+from planemotion.core.connection import Connection
+from planemotion.components.circle import Circle
+from planemotion.components.rectangle import Rectangle
+from planemotion.components.trapezoid import Trapezoid
+
+
+class PlaneMotionViewModel:
+    """
+    ViewModel for the PlaneMotion engine.
+    Manages application state and business logic.
+    """
+
+    def __init__(self):
+        """Initialize the ViewModel."""
+        # Component and connection storage
+        self.components: List[Component] = []
+        self.connections: List[Connection] = []
+        
+        # Selection state
+        self.selected_component: Optional[Component] = None
+        
+        # Dragging state
+        self.dragging_component: Optional[Component] = None
+        self.drag_offset_x = 0.0
+        self.drag_offset_y = 0.0
+
+        # Resizing state
+        self.resizing_component: Optional[Component] = None
+        
+        # Connection creation state
+        self.connection_start: Optional[Component] = None
+        
+        # Viewport state (for Visio-like zoom/pan)
+        self.viewport_zoom = 1.0  # Current zoom level
+        self.viewport_offset_x = 0.0  # Viewport X offset
+        self.viewport_offset_y = 0.0  # Viewport Y offset
+        self.min_zoom = 0.25  # Minimum zoom (zoom out 4x)
+        self.max_zoom = 4.0   # Maximum zoom (zoom in 4x)
+        
+        # Pan state
+        self.is_panning = False
+        self.pan_start_x = 0.0
+        self.pan_start_y = 0.0
+        
+        # Last click position for inserting components
+        self.last_click_x = 0.0
+        self.last_click_y = 0.0
+        self.last_click_valid = False
+        
+        # Component templates (history of created components)
+        self.component_templates: List[Component] = []
+        
+        # Current file path for save/load operations
+        self.current_file_path: Optional[str] = None
+        
+        # Notifications for View
+        self.status_message: str = ""
+
+        # Component scale limits
+        self.min_component_scale = 0.25
+        self.max_component_scale = 4.0
+
+    # Component creation methods
+    def create_circle(self, x: float, y: float, radius: float = 30, 
+                     color: Tuple[int, int, int] = (100, 100, 255)) -> Circle:
+        """
+        Create a new circle component.
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            radius: Circle radius
+            color: RGB color tuple
+            
+        Returns:
+            Created Circle instance
+        """
+        circle = Circle(x, y, radius, color)
+        self.components.append(circle)
+        # Add to templates
+        template = Circle(0, 0, radius, color)
+        if not any(isinstance(t, Circle) and t.radius == radius and t.color == color 
+                   for t in self.component_templates):
+            self.component_templates.append(template)
+        self.status_message = "Circle created"
+        return circle
+
+    def create_rectangle(self, x: float, y: float, width: float = 60, height: float = 40,
+                        color: Tuple[int, int, int] = (255, 100, 100)) -> Rectangle:
+        """
+        Create a new rectangle component.
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            width: Rectangle width
+            height: Rectangle height
+            color: RGB color tuple
+            
+        Returns:
+            Created Rectangle instance
+        """
+        rectangle = Rectangle(x, y, width, height, color)
+        self.components.append(rectangle)
+        # Add to templates
+        template = Rectangle(0, 0, width, height, color)
+        if not any(isinstance(t, Rectangle) and t.width == width and t.height == height and t.color == color
+                   for t in self.component_templates):
+            self.component_templates.append(template)
+        self.status_message = "Rectangle created"
+        return rectangle
+
+    def create_trapezoid(self, x: float, y: float, top_width: float = 50,
+                         bottom_width: float = 90, height: float = 50,
+                         color: Tuple[int, int, int] = (120, 200, 140)) -> Trapezoid:
+        """
+        Create a new trapezoid component.
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            top_width: Top width
+            bottom_width: Bottom width
+            height: Trapezoid height
+            color: RGB color tuple
+            
+        Returns:
+            Created Trapezoid instance
+        """
+        trapezoid = Trapezoid(x, y, top_width, bottom_width, height, color)
+        self.components.append(trapezoid)
+        # Add to templates
+        template = Trapezoid(0, 0, top_width, bottom_width, height, color)
+        if not any(isinstance(t, Trapezoid) and t.top_width == top_width and
+                   t.bottom_width == bottom_width and t.height == height and t.color == color
+                   for t in self.component_templates):
+            self.component_templates.append(template)
+        self.status_message = "Trapezoid created"
+        return trapezoid
+
+    def rotate_selected(self, delta_deg: float = 90.0):
+        """Rotate the selected component."""
+        if self.selected_component:
+            self.selected_component.rotate(delta_deg)
+            self.status_message = "Component rotated"
+
+    def create_connection(self, source: Component, target: Component) -> Optional[Connection]:
+        """
+        Create a connection between two components.
+        
+        Args:
+            source: Source component
+            target: Target component
+            
+        Returns:
+            Created Connection instance or None if invalid
+        """
+        if source == target:
+            self.status_message = "Cannot connect component to itself"
+            return None
+        
+        # Check if connection already exists
+        for conn in self.connections:
+            if (conn.source == source and conn.target == target) or \
+               (conn.source == target and conn.target == source):
+                self.status_message = "Connection already exists"
+                return None
+        
+        connection = Connection(source, target)
+        self.connections.append(connection)
+        self.status_message = "Connection created"
+        return connection
+
+    # Selection methods
+    def select_component_at_point(self, x: float, y: float) -> Optional[Component]:
+        """
+        Select a component at the given point.
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            
+        Returns:
+            Selected component or None
+        """
+        # Record last click position
+        self.record_last_click(x, y)
+        
+        # Check components in reverse order (top to bottom)
+        for component in reversed(self.components):
+            if component.contains_point(x, y):
+                self.selected_component = component
+                return component
+        
+        # No component found, deselect
+        self.selected_component = None
+        return None
+
+    def deselect_all(self):
+        """Deselect all components."""
+        self.selected_component = None
+
+    def record_last_click(self, x: float, y: float):
+        """Record the last click position in world coordinates."""
+        self.last_click_x = x
+        self.last_click_y = y
+        self.last_click_valid = True
+
+    def has_last_click(self) -> bool:
+        """Check whether a last click position is available."""
+        return self.last_click_valid
+
+    def get_last_click(self) -> Tuple[float, float]:
+        """Get the last click position."""
+        return self.last_click_x, self.last_click_y
+
+    # Dragging methods
+    def start_drag(self, x: float, y: float) -> bool:
+        """
+        Start dragging operation at the given point.
+        
+        Args:
+            x: Mouse X-coordinate
+            y: Mouse Y-coordinate
+            
+        Returns:
+            True if drag started successfully
+        """
+        component = self.select_component_at_point(x, y)
+        if component:
+            self.dragging_component = component
+            self.drag_offset_x = component.x - x
+            self.drag_offset_y = component.y - y
+            return True
+        return False
+
+    def update_drag(self, x: float, y: float):
+        """
+        Update dragging position.
+        
+        Args:
+            x: Current mouse X-coordinate
+            y: Current mouse Y-coordinate
+        """
+        if self.dragging_component:
+            new_x = x + self.drag_offset_x
+            new_y = y + self.drag_offset_y
+            self.dragging_component.update_position(new_x, new_y)
+
+    def stop_drag(self):
+        """Stop dragging operation."""
+        self.dragging_component = None
+
+    # Resizing methods
+    def start_resize(self, x: float, y: float, threshold: float) -> bool:
+        """
+        Start resizing if near component edge.
+        
+        Args:
+            x: Mouse X-coordinate (world)
+            y: Mouse Y-coordinate (world)
+            threshold: Edge hit threshold (world)
+            
+        Returns:
+            True if resize started
+        """
+        component = self.get_resize_component_at_point(x, y, threshold)
+        if component:
+            self.resizing_component = component
+            self.selected_component = component
+            return True
+        return False
+
+    def update_resize(self, x: float, y: float):
+        """
+        Update resizing based on current mouse position.
+        
+        Args:
+            x: Mouse X-coordinate (world)
+            y: Mouse Y-coordinate (world)
+        """
+        component = self.resizing_component
+        if not component:
+            return
+
+        dx = abs(x - component.x)
+        dy = abs(y - component.y)
+
+        if isinstance(component, Circle):
+            if component.base_radius > 0:
+                distance = math.hypot(x - component.x, y - component.y)
+                new_scale = distance / component.base_radius
+            else:
+                new_scale = component.scale
+        elif isinstance(component, Rectangle):
+            half_base_w = component.base_width / 2 if component.base_width > 0 else 1.0
+            half_base_h = component.base_height / 2 if component.base_height > 0 else 1.0
+            new_scale = max(dx / half_base_w, dy / half_base_h)
+        elif isinstance(component, Trapezoid):
+            half_base_w = max(component.base_top_width, component.base_bottom_width) / 2
+            half_base_h = component.base_height / 2 if component.base_height > 0 else 1.0
+            if half_base_w <= 0:
+                half_base_w = 1.0
+            new_scale = max(dx / half_base_w, dy / half_base_h)
+        else:
+            new_scale = component.scale
+
+        component.scale = max(self.min_component_scale, min(self.max_component_scale, new_scale))
+
+    def stop_resize(self):
+        """Stop resizing operation."""
+        self.resizing_component = None
+
+    def is_resizing(self) -> bool:
+        """Check if currently resizing."""
+        return self.resizing_component is not None
+
+    # Viewport transformation methods
+    def world_to_screen(self, world_x: float, world_y: float) -> Tuple[float, float]:
+        """
+        Convert world coordinates to screen coordinates.
+        
+        Args:
+            world_x: X-coordinate in world space
+            world_y: Y-coordinate in world space
+            
+        Returns:
+            Tuple of (screen_x, screen_y)
+        """
+        screen_x = (world_x + self.viewport_offset_x) * self.viewport_zoom
+        screen_y = (world_y + self.viewport_offset_y) * self.viewport_zoom
+        return screen_x, screen_y
+
+    def screen_to_world(self, screen_x: float, screen_y: float) -> Tuple[float, float]:
+        """
+        Convert screen coordinates to world coordinates.
+        
+        Args:
+            screen_x: X-coordinate in screen space
+            screen_y: Y-coordinate in screen space
+            
+        Returns:
+            Tuple of (world_x, world_y)
+        """
+        world_x = screen_x / self.viewport_zoom - self.viewport_offset_x
+        world_y = screen_y / self.viewport_zoom - self.viewport_offset_y
+        return world_x, world_y
+
+    # Viewport zoom methods
+    def zoom_viewport(self, delta: float, center_x: float, center_y: float):
+        """
+        Zoom the viewport around a center point.
+        
+        Args:
+            delta: Zoom delta (positive to zoom in, negative to zoom out)
+            center_x: Screen X-coordinate of zoom center
+            center_y: Screen Y-coordinate of zoom center
+        """
+        old_zoom = self.viewport_zoom
+        
+        # Calculate new zoom level
+        zoom_factor = 1.1 if delta > 0 else 0.9
+        new_zoom = old_zoom * zoom_factor
+        
+        # Clamp zoom to limits
+        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+        
+        if new_zoom != old_zoom:
+            # Adjust offset to zoom around the center point
+            world_x, world_y = self.screen_to_world(center_x, center_y)
+            
+            self.viewport_zoom = new_zoom
+            
+            # Recalculate offset to keep the same world point under the cursor
+            self.viewport_offset_x = center_x / new_zoom - world_x
+            self.viewport_offset_y = center_y / new_zoom - world_y
+            
+            zoom_percent = int(self.viewport_zoom * 100)
+            self.status_message = f"Zoom: {zoom_percent}%"
+
+    def reset_viewport(self):
+        """Reset viewport to default zoom and position."""
+        self.viewport_zoom = 1.0
+        self.viewport_offset_x = 0.0
+        self.viewport_offset_y = 0.0
+        self.status_message = "Viewport reset"
+
+    # Pan methods
+    def start_pan(self, screen_x: float, screen_y: float):
+        """
+        Start panning operation.
+        
+        Args:
+            screen_x: Screen X-coordinate
+            screen_y: Screen Y-coordinate
+        """
+        self.is_panning = True
+        self.pan_start_x = screen_x
+        self.pan_start_y = screen_y
+
+    def update_pan(self, screen_x: float, screen_y: float):
+        """
+        Update panning position.
+        
+        Args:
+            screen_x: Current screen X-coordinate
+            screen_y: Current screen Y-coordinate
+        """
+        if self.is_panning:
+            dx = screen_x - self.pan_start_x
+            dy = screen_y - self.pan_start_y
+            
+            self.viewport_offset_x += dx / self.viewport_zoom
+            self.viewport_offset_y += dy / self.viewport_zoom
+            
+            self.pan_start_x = screen_x
+            self.pan_start_y = screen_y
+
+    def stop_pan(self):
+        """Stop panning operation."""
+        self.is_panning = False
+
+    # Scaling methods (keep for individual component scaling if needed)
+    def scale_selected(self, delta: float):
+        """
+        Scale the selected component.
+        
+        Args:
+            delta: Scale change amount
+        """
+        if self.selected_component:
+            self.selected_component.update_scale(delta)
+
+    # Connection creation methods
+    def start_connection_at_point(self, x: float, y: float) -> bool:
+        """
+        Start or complete connection creation.
+        
+        Args:
+            x: Mouse X-coordinate
+            y: Mouse Y-coordinate
+            
+        Returns:
+            True if operation succeeded
+        """
+        component = self.get_component_at_point(x, y)
+        if not component:
+            return False
+        
+        if self.connection_start is None:
+            # Start new connection
+            self.connection_start = component
+            self.status_message = "Connection start selected"
+            return True
+        else:
+            # Complete connection
+            if self.create_connection(self.connection_start, component):
+                self.connection_start = None
+                return True
+            self.connection_start = None
+            return False
+
+    def cancel_connection(self):
+        """Cancel ongoing connection creation."""
+        if self.connection_start:
+            self.connection_start = None
+            self.status_message = "Connection cancelled"
+
+    def get_connection_preview_line(self, mouse_x: float, mouse_y: float) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """
+        Get the preview line for connection creation.
+        
+        Args:
+            mouse_x: Current mouse X-coordinate
+            mouse_y: Current mouse Y-coordinate
+            
+        Returns:
+            Tuple of (start_pos, end_pos) or None
+        """
+        if self.connection_start:
+            start_pos = self.connection_start.get_connection_point()
+            end_pos = (mouse_x, mouse_y)
+            return (start_pos, end_pos)
+        return None
+
+    # Deletion methods
+    def delete_selected(self) -> bool:
+        """
+        Delete the selected component and its connections.
+        
+        Returns:
+            True if deletion succeeded
+        """
+        if self.selected_component:
+            self.delete_component(self.selected_component)
+            self.selected_component = None
+            return True
+        return False
+
+    def delete_component(self, component: Component):
+        """
+        Delete a component and all its connections.
+        
+        Args:
+            component: Component to delete
+        """
+        # Remove all connections involving this component
+        self.connections = [
+            conn for conn in self.connections
+            if conn.source != component and conn.target != component
+        ]
+        
+        # Remove the component
+        self.components.remove(component)
+        self.status_message = "Component deleted"
+
+    # Query methods
+    def get_component_at_point(self, x: float, y: float) -> Optional[Component]:
+        """
+        Get component at the given point (without selection).
+        
+        Args:
+            x: X-coordinate
+            y: Y-coordinate
+            
+        Returns:
+            Component at point or None
+        """
+        for component in reversed(self.components):
+            if component.contains_point(x, y):
+                return component
+        return None
+
+    def get_resize_component_at_point(self, x: float, y: float, threshold: float) -> Optional[Component]:
+        """
+        Get a component if the point is near its edge.
+        
+        Args:
+            x: X-coordinate (world)
+            y: Y-coordinate (world)
+            threshold: Edge hit threshold (world)
+        """
+        for component in reversed(self.components):
+            if self._is_near_component_edge(component, x, y, threshold):
+                return component
+        return None
+
+    def _is_near_component_edge(self, component: Component, x: float, y: float, threshold: float) -> bool:
+        """Check if point is near component edge."""
+        if isinstance(component, Circle):
+            distance = math.hypot(x - component.x, y - component.y)
+            return abs(distance - component.radius) <= threshold
+        if isinstance(component, Rectangle):
+            if component.rotation_deg % 360 != 0:
+                vertices = component.get_vertices()
+                return self._is_near_polygon_edge(vertices, x, y, threshold)
+            half_w = component.width / 2
+            half_h = component.height / 2
+            dx = abs(x - component.x)
+            dy = abs(y - component.y)
+            within_bounds = dx <= half_w + threshold and dy <= half_h + threshold
+            near_vertical = abs(dx - half_w) <= threshold and dy <= half_h + threshold
+            near_horizontal = abs(dy - half_h) <= threshold and dx <= half_w + threshold
+            return within_bounds and (near_vertical or near_horizontal)
+        if isinstance(component, Trapezoid):
+            vertices = component.get_vertices()
+            return self._is_near_polygon_edge(vertices, x, y, threshold)
+        return False
+
+    def _is_near_polygon_edge(self, vertices, x: float, y: float, threshold: float) -> bool:
+        """Check if point is near any polygon edge."""
+        for i in range(len(vertices)):
+            x1, y1 = vertices[i]
+            x2, y2 = vertices[(i + 1) % len(vertices)]
+            if self._distance_point_to_segment(x, y, x1, y1, x2, y2) <= threshold:
+                return True
+        return False
+
+    def _distance_point_to_segment(self, px: float, py: float, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Compute distance from point to line segment."""
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(px - x1, py - y1)
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        proj_x = x1 + t * dx
+        proj_y = y1 + t * dy
+        return math.hypot(px - proj_x, py - proj_y)
+
+    def get_all_components(self) -> List[Component]:
+        """Get all components."""
+        return self.components
+
+    def get_all_connections(self) -> List[Connection]:
+        """Get all connections."""
+        return self.connections
+
+    def is_component_selected(self, component: Component) -> bool:
+        """
+        Check if a component is selected.
+        
+        Args:
+            component: Component to check
+            
+        Returns:
+            True if selected
+        """
+        return component == self.selected_component
+
+    def is_dragging(self) -> bool:
+        """Check if currently dragging."""
+        return self.dragging_component is not None
+
+    def is_creating_connection(self) -> bool:
+        """Check if currently creating a connection."""
+        return self.connection_start is not None
+
+    # Scene management
+    def clear_scene(self):
+        """Clear all components and connections."""
+        self.components.clear()
+        self.connections.clear()
+        self.selected_component = None
+        self.dragging_component = None
+        self.connection_start = None
+        self.current_file_path = None
+        self.status_message = "Scene cleared"
+
+    def set_components_and_connections(self, components: List[Component], connections: List[Connection]):
+        """
+        Set components and connections (used for loading).
+        
+        Args:
+            components: List of components
+            connections: List of connections
+        """
+        self.components = components
+        self.connections = connections
+        self.selected_component = None
+        self.dragging_component = None
+        self.connection_start = None
+
+    def get_status_message(self) -> str:
+        """Get the current status message."""
+        return self.status_message
+
+    def clear_status_message(self):
+        """Clear the status message."""
+        self.status_message = ""
+
+    # Component template methods
+    def get_component_templates(self) -> List[Component]:
+        """Get list of component templates."""
+        return self.component_templates
+
+    def insert_template_at_last_click(self, template_index: int) -> Optional[Component]:
+        """
+        Insert a component template at the last click position.
+        
+        Args:
+            template_index: Index of the template to insert
+            
+        Returns:
+            Created component or None if invalid index
+        """
+        if 0 <= template_index < len(self.component_templates):
+            template = self.component_templates[template_index]
+            
+            if isinstance(template, Circle):
+                return self.create_circle(
+                    self.last_click_x, self.last_click_y,
+                    template.radius, template.color
+                )
+            elif isinstance(template, Rectangle):
+                return self.create_rectangle(
+                    self.last_click_x, self.last_click_y,
+                    template.width, template.height, template.color
+                )
+        return None
+
+    # File path management
+    def set_file_path(self, file_path: Optional[str]):
+        """Set the current file path."""
+        self.current_file_path = file_path
+
+    def get_file_path(self) -> Optional[str]:
+        """Get the current file path."""
+        return self.current_file_path
+
