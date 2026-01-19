@@ -56,5 +56,44 @@
             "hovered_border": "#5e81ac",
             "active_border": "#4c566a"
         }
+    },
+    "#edit_menu_button": {
+        "colours": {
+            "normal_bg": "#3b4252",
+            "hovered_bg": "#4c566a",
+            "active_bg": "#2e3440",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "active_text": "#ffffff",
+            "normal_border": "#4c566a",
+            "hovered_border": "#5e81ac",
+            "active_border": "#4c566a"
+        }
+    },
+    "#menu_panel": {
+        "colours": {
+            "dark_bg": "#ffffff",
+            "normal_bg": "#ffffff"
+        },
+        "misc": {
+            "shape": "rectangle",
+            "border_width": "1",
+            "shadow_width": "2"
+        }
+    },
+    "#menu_item_button": {
+        "colours": {
+            "normal_bg": "#00000000",
+            "hovered_bg": "#e0e0e0",
+            "selected_bg": "#d0d0d0",
+            "disabled_bg": "#00000000",
+            "normal_text": "#00000000",
+            "hovered_text": "#00000000",
+            "selected_text": "#00000000",
+            "disabled_text": "#00000000",
+            "normal_border": "#00000000",
+            "hovered_border": "#00000000",
+            "selected_border": "#00000000"
+        }
     }
 }

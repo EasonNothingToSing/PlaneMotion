@@ -76,7 +76,11 @@ class PlaneMotionEngine:
     def handle_events(self):
         """Handle all pygame events and delegate to ViewModel."""
         for event in pygame.event.get():
-            # Let GUI handle events first
+            # Menu manager handles its events first
+            if self.view.menu_manager.handle_event(event):
+                continue
+            
+            # Let GUI handle events next
             if self.view.process_event(event):
                 continue
             
@@ -88,9 +92,6 @@ class PlaneMotionEngine:
             
             elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                 self.handle_gui_button(event)
-            
-            elif event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
-                self.handle_gui_dropdown(event)
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.handle_mouse_down(event)
@@ -116,7 +117,7 @@ class PlaneMotionEngine:
         """
         screen_x, screen_y = event.pos
         
-        # Ignore clicks on menu and control bars
+        # Ignore clicks on menu bar
         if screen_y < self.view.canvas_top:
             return
         
@@ -135,12 +136,13 @@ class PlaneMotionEngine:
         elif event.button == 2:
             self.viewmodel.start_pan(screen_x, screen_y)
         
-        # Right click - create connections
+        # Right click - context menu
         elif event.button == 3:
             # Convert screen coordinates to world coordinates
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
             self.viewmodel.record_last_click(world_x, world_y)
-            self.viewmodel.start_connection_at_point(world_x, world_y)
+            # Show context menu
+            self.show_context_menu(event.pos)
 
     def handle_mouse_up(self, event):
         """
@@ -262,23 +264,66 @@ class PlaneMotionEngine:
         Args:
             event: pygame_gui button pressed event
         """
-        if event.ui_element == self.view.file_menu_button:
-            self.view.show_file_menu()
-        elif event.ui_element == self.view.create_circle_button:
-            world_x, world_y = self._get_insertion_point()
-            self.viewmodel.create_circle(world_x, world_y)
-        elif event.ui_element == self.view.create_rectangle_button:
-            world_x, world_y = self._get_insertion_point()
-            self.viewmodel.create_rectangle(world_x, world_y)
-        elif event.ui_element == self.view.create_trapezoid_button:
-            world_x, world_y = self._get_insertion_point()
-            self.viewmodel.create_trapezoid(world_x, world_y)
-        elif event.ui_element == self.view.delete_selected_button:
-            self.viewmodel.delete_selected()
-        elif event.ui_element == self.view.reset_view_button:
-            self.viewmodel.reset_viewport()
-        elif event.ui_element == self.view.rotate_button:
-            self.viewmodel.rotate_selected(90.0)
+        if event.ui_element == self.view.btn_file:
+            # Show File menu
+            r = self.view.btn_file.get_abs_rect()
+            items = self._get_file_menu_with_actions()
+            self.view.menu_manager.open_root_menu((r.left, r.bottom), items)
+        elif event.ui_element == self.view.btn_edit:
+            # Show Edit menu
+            r = self.view.btn_edit.get_abs_rect()
+            items = self._get_edit_menu_with_actions()
+            self.view.menu_manager.open_root_menu((r.left, r.bottom), items)
+    
+    def _get_file_menu_with_actions(self):
+        """Get File menu items with actual action functions."""
+        return [
+            {"type": "item", "label": "Open", "shortcut": "Ctrl+O", "action": self.open_file_dialog},
+            {"type": "item", "label": "Save", "shortcut": "Ctrl+S", "action": lambda: self.save_scene()},
+            {"type": "item", "label": "Save As", "shortcut": "Ctrl+Shift+S", "action": self.save_as_dialog},
+            {"type": "separator"},
+            {"type": "item", "label": "Exit", "shortcut": "Alt+F4", "action": lambda: setattr(self, 'running', False)},
+        ]
+    
+    def _get_edit_menu_with_actions(self):
+        """Get Edit menu items with actual action functions."""
+        return [
+            {"type": "item", "label": "Insert", "submenu": [
+                {"type": "item", "label": "Circle", "action": lambda: self.insert_at_click(self.viewmodel.create_circle)},
+                {"type": "item", "label": "Rectangle", "action": lambda: self.insert_at_click(self.viewmodel.create_rectangle)},
+                {"type": "item", "label": "Trapezoid", "action": lambda: self.insert_at_click(self.viewmodel.create_trapezoid)},
+            ]},
+            {"type": "separator"},
+            {"type": "item", "label": "Delete Selected", "shortcut": "Del", "action": self.viewmodel.delete_selected},
+            {"type": "item", "label": "Rotate 90°", "shortcut": "R", "action": lambda: self.viewmodel.rotate_selected(90.0)},
+            {"type": "separator"},
+            {"type": "item", "label": "Reset View", "shortcut": "Ctrl+0", "action": self.viewmodel.reset_viewport},
+        ]
+    
+    def insert_at_click(self, create_func):
+        """Insert component at last click position or screen center."""
+        if self.viewmodel.has_last_click():
+            x, y = self.viewmodel.get_last_click()
+        else:
+            # Use screen center
+            center_x = self.view.width / 2
+            center_y = self.view.canvas_top + (self.view.height - self.view.canvas_top) / 2
+            x, y = self.viewmodel.screen_to_world(center_x, center_y)
+        create_func(x, y)
+    
+    def show_context_menu(self, pos):
+        """Show context menu at mouse position."""
+        items = [
+            {"type": "item", "label": "Insert Here", "submenu": [
+                {"type": "item", "label": "Circle", "action": lambda: self.insert_at_click(self.viewmodel.create_circle)},
+                {"type": "item", "label": "Rectangle", "action": lambda: self.insert_at_click(self.viewmodel.create_rectangle)},
+                {"type": "item", "label": "Trapezoid", "action": lambda: self.insert_at_click(self.viewmodel.create_trapezoid)},
+            ]},
+            {"type": "separator"},
+            {"type": "item", "label": "Delete", "shortcut": "Del", "action": self.viewmodel.delete_selected},
+            {"type": "item", "label": "Rotate 90°", "shortcut": "R", "action": lambda: self.viewmodel.rotate_selected(90.0)},
+        ]
+        self.view.menu_manager.open_root_menu(pos, items)
 
     def _get_insertion_point(self):
         """
@@ -293,26 +338,6 @@ class PlaneMotionEngine:
         center_screen_x = self.view.width / 2
         center_screen_y = self.view.canvas_top + (self.view.height - self.view.canvas_top) / 2
         return self.viewmodel.screen_to_world(center_screen_x, center_screen_y)
-
-    def handle_gui_dropdown(self, event):
-        """
-        Handle GUI dropdown selection events.
-        
-        Args:
-            event: pygame_gui dropdown changed event
-        """
-        if event.ui_element == self.view.file_dropdown:
-            option = event.text
-            self.view.close_dropdowns()
-            
-            if option == 'Open':
-                self.open_file_dialog()
-            elif option == 'Save':
-                self.save_scene()
-            elif option == 'Save As':
-                self.save_as_dialog()
-            elif option == 'Exit':
-                self.running = False
 
     def open_file_dialog(self):
         """Open file dialog to load a scene."""
