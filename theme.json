@@ -70,6 +70,19 @@
             "active_border": "#4c566a"
         }
     },
+    "#connect_button": {
+        "colours": {
+            "normal_bg": "#3b4252",
+            "hovered_bg": "#4c566a",
+            "active_bg": "#5e81ac",
+            "normal_text": "#e6e8ef",
+            "hovered_text": "#ffffff",
+            "active_text": "#ffffff",
+            "normal_border": "#4c566a",
+            "hovered_border": "#5e81ac",
+            "active_border": "#88c0d0"
+        }
+    },
     "#menu_panel": {
         "colours": {
             "dark_bg": "#ffffff",

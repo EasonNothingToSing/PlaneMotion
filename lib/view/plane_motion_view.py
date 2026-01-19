@@ -89,6 +89,18 @@ class PlaneMotionView:
             container=self.menubar,
             object_id='#edit_menu_button'
         )
+        
+        # Connection mode toggle button
+        self.btn_connect = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(174, 4, 110, self.menu_height - 8),
+            text='Connect',
+            manager=self.gui_manager,
+            container=self.menubar,
+            object_id='#connect_button'
+        )
+        
+        # Connection mode state
+        self.connection_mode = False
 
     def get_file_menu_items(self):
         """Get File menu structure."""
@@ -127,6 +139,22 @@ class PlaneMotionView:
             {"type": "item", "label": "Delete", "shortcut": "Del", "action": "delete"},
             {"type": "item", "label": "Rotate 90°", "shortcut": "R", "action": "rotate"},
         ]
+    
+    def toggle_connection_mode(self):
+        """Toggle connection mode on/off."""
+        self.connection_mode = not self.connection_mode
+        if self.connection_mode:
+            self.btn_connect.set_text('Disconnect')
+            self.viewmodel.status_message = "Connection mode: Click components to connect"
+        else:
+            self.btn_connect.set_text('Connect')
+            self.viewmodel.status_message = ""
+            # Cancel any in-progress connection
+            self.viewmodel.cancel_connection()
+    
+    def is_connection_mode(self) -> bool:
+        """Check if connection mode is active."""
+        return self.connection_mode
 
     def render(self, mouse_pos: Optional[Tuple[int, int]] = None):
         """

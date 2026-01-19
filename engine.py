@@ -121,16 +121,22 @@ class PlaneMotionEngine:
         if screen_y < self.view.canvas_top:
             return
         
-        # Left click - select and drag
+        # Left click
         if event.button == 1:
             # Convert screen coordinates to world coordinates
             world_x, world_y = self.viewmodel.screen_to_world(screen_x, screen_y)
             self.viewmodel.record_last_click(world_x, world_y)
-            resize_threshold_world = self.resize_hit_threshold_px / self.viewmodel.viewport_zoom
-            if self.viewmodel.start_resize(world_x, world_y, resize_threshold_world):
-                return
-            if not self.viewmodel.start_drag(world_x, world_y):
-                self.viewmodel.deselect_all()
+            
+            # Connection mode: create connections with left click
+            if self.view.is_connection_mode():
+                self.viewmodel.start_connection_at_point(world_x, world_y)
+            else:
+                # Normal mode: select and drag
+                resize_threshold_world = self.resize_hit_threshold_px / self.viewmodel.viewport_zoom
+                if self.viewmodel.start_resize(world_x, world_y, resize_threshold_world):
+                    return
+                if not self.viewmodel.start_drag(world_x, world_y):
+                    self.viewmodel.deselect_all()
         
         # Middle click - pan
         elif event.button == 2:
@@ -274,6 +280,9 @@ class PlaneMotionEngine:
             r = self.view.btn_edit.get_abs_rect()
             items = self._get_edit_menu_with_actions()
             self.view.menu_manager.open_root_menu((r.left, r.bottom), items)
+        elif event.ui_element == self.view.btn_connect:
+            # Toggle connection mode
+            self.view.toggle_connection_mode()
     
     def _get_file_menu_with_actions(self):
         """Get File menu items with actual action functions."""
